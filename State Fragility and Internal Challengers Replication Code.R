@@ -79,6 +79,22 @@ target <-
 
 sub_dat2 <- filter(data, ccode %in% target)
 
+pdat <- pdata.frame(data, index = c("ccode", "year"))
+
+purtest(pdat$fragility, test = "ips", exo = "intercept",
+             lags = "AIC", pmax = 5)
+install.packages("punitroots", repos="http://R-Forge.R-project.org")
+library(CADFtest)
+library(gss)
+library(fUnitRoots)
+library(punitroots)
+
+adf <- pCADFtest(pdat)
+
+pCADFtest(Y, X=NULL, covariates=NULL, crosscorr=0.10, type="trend",
+          max.lag.y=1, min.lag.X=0, max.lag.X=0,
+          criterion=c("none", "BIC", "AIC", "HQC", "MAIC"), ...)
+
 # Tables & Figures =============================================================
 
 # Table 1 - Main Analysis ----------------------------------------------------
@@ -91,6 +107,29 @@ main <- plm(
   effect = "twoways",
   data = data
 )
+
+no.tfe <- plm(
+  fragility ~ num_tc + lib_dem_vdem
+  + cowintraongoing + cow_inter + lag_fragility,
+  index = c("state_name", "year"),
+  model = "within",
+  effect = "individual",
+  data = data
+)
+
+main_pool <- plm(fragility ~ num_tc + lib_dem_vdem
+          + cowintraongoing + cow_inter + lag_fragility,
+          index = c("state_name", "year"), model="pooling", data = data)
+
+pFtest(main, main_pool)
+phtest(main, no.tfe)
+pbgtest(main)
+pcdtest(fragility ~ num_tc + lib_dem_vdem
+        + cowintraongoing + cow_inter + lag_fragility,index = c("state_name", "year"),
+        model = "within",effect = "individual", data= data)
+
+frag <- pdata.frame(data)$fragility
+frag.test <- purtest(frag, test = "levinlin", lags = 2, exo = "trend")
 
 main.sub <- plm(
   fragility ~ num_tc + lib_dem_vdem
@@ -123,14 +162,19 @@ stargazer(
   out = "mainmod.htm"
 )
 
+
+
 # Table 2 - Survival Model ---------------------------------------------------
 
 temp <- filter(data, !is.na(fail))
 surv_elapse <- Surv(temp$alt_start, temp$alt_stop, temp$fail)
 
+summary(temp$year)
+
+
 surv_test <- coxph(
   surv_elapse ~ fragility + lib_dem_vdem
-    + cowintraongoing + cow_inter + lag_fragility +
+    + cowintraongoing + cow_inter +
     cluster(ccode),
   data = temp,
   method = "efron"
@@ -400,10 +444,10 @@ Avs <- left_join(Avs, TransAvg)
 
 Avs <- Avs %>% filter(year < 2011)
 
-mean(Avs$glob_avg)
-mean(Avs$devel_avg)
-mean(Avs$undev_avg)
-mean(Avs$trans_avg)
+glob_mean <- mean(Avs$glob_avg)
+dev_mean <- mean(Avs$devel_avg)
+undev_mean <- mean(Avs$undev_avg)
+trans_mean <- mean(Avs$trans_avg)
 
 # Average Fragility of full sample versus subset - page 18 -------------------
 
@@ -411,7 +455,14 @@ summary(data$fragility) # 0.146
 summary(sub_dat$fragility) # -0.036
 summary(sub_dat2$fragility) # 0.464
 
+summary(hs_dat$fragility)
+sd <- sd(hs_dat$fragility, na.rm = T)
+sd #0.9541746
 
+# mean Devel Average SDs below global average
+
+dev_sd <- (dev_mean +0.2075577)/ (-sd)
+undev_sd <- (undev_mean + 0.2075577) / sd
 
 # Appendices ===================================================================
 
